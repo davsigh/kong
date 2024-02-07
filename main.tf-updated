@@ -1,0 +1,76 @@
+provider "aws" {
+  region = "ap-south-1"  # Replace with your desired region
+}
+
+resource "aws_instance" "kong_instance" {
+  ami           = "ami-03f4878755434977f"  # Replace with a suitable AMI ID
+  instance_type = "t3.medium"  # Choose an appropriate instance type
+  key_name      = "davinder-xs.pem"  # Replace with your key pair
+  subnet_id    = "subnet-05f780e3d3fccea74"
+  user_data = <<-EOF
+              #!/bin/bash
+              sudo apt-get update
+              sudo apt-get install -y docker.io
+              sudo usermod -aG docker ubuntu
+              docker pull kong:latest
+	      docker network create kong-net
+              docker run -d --name kong-gateway \
+--network=kong-net \
+-e "KONG_DATABASE=postgres" \
+-e "KONG_PG_HOST=kong-database" \
+-e "KONG_PG_USER=kong" \
+-e "KONG_PG_PASSWORD=kongpass" \
+-e "KONG_PROXY_ACCESS_LOG=/dev/stdout" \
+-e "KONG_ADMIN_ACCESS_LOG=/dev/stdout" \
+-e "KONG_PROXY_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_ERROR_LOG=/dev/stderr" \
+-e "KONG_ADMIN_LISTEN=0.0.0.0:8001" \
+-e "KONG_ADMIN_GUI_URL=http://localhost:8002" \
+-e KONG_LICENSE_DATA \
+-p 8000:8000 \
+-p 8443:8443 \
+-p 8001:8001 \
+-p 8444:8444 \
+-p 8002:8002 \
+-p 8445:8445 \
+-p 8003:8003 \
+-p 8004:8004 \
+kong/kong-gateway:3.5.0.3
+              EOF
+
+  tags = {
+    Name = "kong-instance"
+  }
+}
+
+resource "aws_security_group" "kong_security_group" {
+  name        = "kong-security-group"
+  description = "Allow incoming traffic on port 8000 and 8001"
+
+  ingress {
+    from_port = 8000
+    to_port   = 8000
+    protocol  = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port = 8001
+    to_port   = 8001
+    protocol  = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port = 0
+    to_port   = 0
+    protocol  = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+#resource "aws_network_interface_sg_attachment" "kong_sg_attachment" {
+#  security_group_id    = aws_security_group.kong_security_group.id
+#  network_interface_id = aws_instance.kong_instance.network_interface_ids[0]
+#}
+
